@@ -26,15 +26,15 @@ class DB
 
   def add(collection, item)
     @data[collection] ||= []
-    new_id = (@data[collection].map { |i| i["id"] }.max || 0) + 1
-    item["id"] = new_id
+    new_id = (@data[collection].map { |i| i['id'] }.max || 0) + 1
+    item['id'] = new_id
     @data[collection] << item
     save_data
     item
   end
 
   def update(collection, id, attributes)
-    item = @data[collection].find { |i| i["id"] == id }
+    item = @data[collection].find { |i| i['id'] == id }
     return nil unless item
     item.update(attributes)
     save_data
@@ -43,7 +43,7 @@ class DB
 
   def delete(collection, id)
     original_length = @data[collection].length
-    @data[collection].reject! { |i| i["id"] == id }
+    @data[collection].reject! { |i| i['id'] == id }
     save_data
     original_length != @data[collection].length
   end
