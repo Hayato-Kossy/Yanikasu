@@ -1,8 +1,7 @@
 # lib/router.rb
 # DB持ってるの良くない
 class Router
-  def initialize(db)
-    @db = db
+  def initialize()
     @routes = {}
   end
 
@@ -10,13 +9,13 @@ class Router
     @routes["#{method} #{path}"] = action
   end
 
-  def route(request)
+  def find_route_and_execute(request,db)
     request_method_path = "#{request.method} #{request.path}"
     @routes.each do |pattern, action|
       regex_pattern = Regexp.new("^" + pattern.gsub(/:[^\s\/]+/, '([^\/]+)') + "$")
       if match = regex_pattern.match(request_method_path)
         request.params.merge!(extract_route_params(pattern, match.captures))
-        return action.call(request, @db)  
+        return action.call(request,db)  
       end
     end
     { status: '404 Not Found', headers: {'Content-Type': 'text/plain'}, body: 'Not Found' }

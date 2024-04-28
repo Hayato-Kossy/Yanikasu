@@ -17,30 +17,31 @@ module Yanikasu
     socket.print "HTTP/1.1 200 OK\r\n" + cors_headers
     socket.close  
   end
+
   def self.start_server
     server = TCPServer.new('localhost', 3000)
     db = DB.new
-    router = Router.new(db)
+    router = Router.new
     load_routes(router)
     puts "Server is running on http://localhost:3000/"
     loop do
-  socket = server.accept     
-  request = Request.new(socket) 
-  if request.method == 'OPTIONS'
-    handle_options_request(socket)
-    next
-  else
-    response = router.route(request)
-    resp = Response.new(
-  status: response[:status],
-  headers: response[:headers],
-  body: response[:body]
-    )
-    resp.send(socket)
-    puts response[:body]
-  end
+      socket = server.accept     
+      request = Request.new(socket) 
+      if request.method == 'OPTIONS'
+        handle_options_request(socket)
+        next
+      else
+        response = router.find_route_and_execute(request, db)
+        resp = Response.new(
+          status: response[:status],
+          headers: response[:headers],
+          body: response[:body]
+        )
+        resp.send(socket)
+        puts response[:body]
+      end
 
-  socket.close
+      socket.close
     end
   end
 
@@ -54,36 +55,36 @@ module Yanikasu
 
   def self.get_all_todos(req, db)
     todos = db.get('todos')
-    { status: '200 OK', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(todos) }
-  end
-
+    { status: '200 OK', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(todos.map { |todo| {id: todo[:id], title: todo[:title], completed: todo[:completed]} }) }
+  end  
+  
   def self.get_todo(req, db)
     todo_id = req.params['id'].to_i
-    todo = db.get('todos').find { |item| item['id'] == todo_id }
+    todo = db.get_item('todos', todo_id)
     if todo
-      { status: '200 OK', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(todo) }
+      { status: '200 OK', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(id: todo[:id], title: todo[:title], completed: todo[:completed]) }
     else
       { status: '404 Not Found', headers: {'Content-Type' => 'text/plain'}, body: 'Todo not found' }
     end
-  end
-
+  end  
+  
   def self.create_todo(req, db)
     data = req.json_body
     todo = db.add('todos', data)
-    { status: '201 Created', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(todo) }
-  end
-
+    { status: '201 Created', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(id: todo[:id], title: todo[:title], completed: todo[:completed]) }
+  end  
+  
   def self.update_todo(req, db)
     todo_id = req.params['id'].to_i
     update_data = req.json_body
     updated_todo = db.update('todos', todo_id, update_data)
     if updated_todo
-      { status: '200 OK', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(updated_todo) }
+      { status: '200 OK', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(id: updated_todo[:id], title: updated_todo[:title], completed: updated_todo[:completed]) }
     else
       { status: '404 Not Found', headers: {'Content-Type' => 'text/plain'}, body: 'Todo not found' }
     end
-  end
-
+  end  
+  
   def self.delete_todo(req, db)
     todo_id = req.params['id'].to_i
     if db.delete('todos', todo_id)
@@ -91,6 +92,5 @@ module Yanikasu
     else
       { status: '404 Not Found', headers: {'Content-Type' => 'text/plain'}, body: 'Todo not found' }
     end
-  end
-
+  end 
 end

@@ -1,50 +1,64 @@
-require 'json'
+require 'sqlite3'
 
 class DB
-  def initialize(filename = 'db.json')
-    @filename = filename
-    @data = load_data
+  def initialize(db_name = 'db.sqlite3')
+    @db = SQLite3::Database.new(db_name)
+    setup_schema
   end
 
-  def load_data
-    if File.exist?(@filename)
-      JSON.parse(File.read(@filename))
-    else
-      {}
-    end
-  end
-
-  def save_data
-    File.open(@filename, 'w') do |file|
-      file.write(JSON.pretty_generate(@data))
-    end
+  def setup_schema
+    @db.execute <<-SQL
+      CREATE TABLE IF NOT EXISTS todos (
+        id INTEGER PRIMARY KEY,
+        title TEXT,
+        completed INTEGER
+      );
+    SQL
   end
 
   def get(collection)
-    @data[collection] || []
+    @db.execute("SELECT * FROM #{collection}").map do |row|
+      { id: row[0], title: row[1], completed: row[2] == 1 }
+    end
   end
 
   def add(collection, item)
-    @data[collection] ||= []
-    new_id = (@data[collection].map { |i| i['id'] }.max || 0) + 1
-    item['id'] = new_id
-    @data[collection] << item
-    save_data
-    item
+    columns = item.keys.join(', ')
+    values = item.values.map { |v| normalize_value(v) }
+    placeholders = Array.new(values.size, '?').join(', ')
+    @db.execute("INSERT INTO #{collection} (#{columns}) VALUES (#{placeholders})", values)
+    item['id'] = @db.last_insert_row_id
+    get_item(collection, item['id'])
   end
 
   def update(collection, id, attributes)
-    item = @data[collection].find { |i| i['id'] == id }
-    return nil unless item
-    item.update(attributes)
-    save_data
-    item
+    set_clause = attributes.keys.map { |k| "#{k} = ?" }.join(', ')
+    values = attributes.values.map { |v| normalize_value(v) }
+    @db.execute("UPDATE #{collection} SET #{set_clause} WHERE id = ?", values + [id])
+    get_item(collection, id)
   end
 
   def delete(collection, id)
-    original_length = @data[collection].length
-    @data[collection].reject! { |i| i['id'] == id }
-    save_data
-    original_length != @data[collection].length
+    @db.execute("DELETE FROM #{collection} WHERE id = ?", id)
+    !@db.changes.zero?
+  end
+
+  def get_item(collection, id)
+    row = @db.get_first_row("SELECT * FROM #{collection} WHERE id = ?", id)
+    return nil unless row
+    { id: row[0], title: row[1], completed: row[2] == 1 }
+  end
+
+  private
+
+  def normalize_value(value)
+    case value
+    when true
+      1
+    when false
+      0
+    else
+      value
+    end
   end
 end
