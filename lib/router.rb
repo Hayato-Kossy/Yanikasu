@@ -61,7 +61,7 @@ class Router
     end
   end
 
-  def initialize()
+  def initialize
     @routes = []
   end
 

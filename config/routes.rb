@@ -9,7 +9,7 @@ Yanikasu.draw_routes do
 
   get '/todos/:id' do |req|
     todo = db.get_item('todos', req.params['id'].to_i)
-    return not_found('Todo not found') unless todo
+    next not_found('Todo not found') unless todo
 
     json(todo)
   end
@@ -21,7 +21,7 @@ Yanikasu.draw_routes do
 
   put '/todos/:id' do |req|
     updated_todo = db.update('todos', req.params['id'].to_i, req.json_body)
-    return not_found('Todo not found') unless updated_todo
+    next not_found('Todo not found') unless updated_todo
 
     json(updated_todo)
   end
