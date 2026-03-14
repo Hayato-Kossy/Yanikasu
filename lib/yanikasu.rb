@@ -7,9 +7,80 @@ require_relative 'router'
 require_relative 'request'
 require_relative 'response'
 require_relative 'db'
+require_relative 'cli'
 require_relative '../middleware/cors'
 
 module Yanikasu
+  class MigrationContext
+    TYPE_MAP = {
+      string: 'TEXT',
+      text: 'TEXT',
+      integer: 'INTEGER',
+      boolean: 'INTEGER',
+      float: 'REAL'
+    }.freeze
+
+    def initialize(db)
+      @db = db
+    end
+
+    def execute(sql, binds = [])
+      @db.execute(sql, binds)
+    end
+
+    def create_table(name, &block)
+      builder = TableDefinition.new
+      builder.instance_eval(&block) if block
+      column_sql = builder.to_sql
+      execute <<~SQL
+        CREATE TABLE #{quote_identifier(name)} (
+          id INTEGER PRIMARY KEY#{column_sql.empty? ? '' : ",\n  #{column_sql}"}
+        );
+      SQL
+    end
+
+    def drop_table(name)
+      execute("DROP TABLE IF EXISTS #{quote_identifier(name)}")
+    end
+
+    def add_column(table_name, column_name, type)
+      execute(
+        "ALTER TABLE #{quote_identifier(table_name)} ADD COLUMN #{quote_identifier(column_name)} #{sql_type(type)}"
+      )
+    end
+
+    private
+
+    def quote_identifier(name)
+      string = name.to_s
+      raise ArgumentError, "Invalid identifier: #{name}" unless /\A[a-zA-Z_][a-zA-Z0-9_]*\z/.match?(string)
+
+      string
+    end
+
+    def sql_type(type)
+      TYPE_MAP.fetch(type.to_sym) do
+        raise ArgumentError, "Unknown migration type: #{type}"
+      end
+    end
+
+    class TableDefinition
+      def initialize
+        @columns = []
+      end
+
+      %i[string text integer boolean float].each do |type|
+        define_method(type) do |name|
+          @columns << "#{name} #{MigrationContext::TYPE_MAP.fetch(type)}"
+        end
+      end
+
+      def to_sql
+        @columns.join(",\n  ")
+      end
+    end
+  end
+
   class SchemaDSL
     def initialize
       @schema = {}
@@ -46,12 +117,14 @@ module Yanikasu
     Response.new(status: '200 OK', headers: CorsMiddleware.apply, body: '').send(socket)
   end
 
-  def self.start_server
-    server = TCPServer.new('localhost', 3000)
-    db = DB.new('db.sqlite3', schema: load_schema)
+  def self.start_server(host: nil, port: nil, db_name: nil, env: ENV)
+    config = server_config(env: env, host: host, port: port, db_name: db_name)
+    server = TCPServer.new(config[:host], config[:port])
+    db = DB.new(config[:db_name], schema: load_schema)
+    run_pending_migrations(db, path: config[:migrations_path])
     router = Router.new
     load_routes(router)
-    puts "Server is running on http://localhost:3000/"
+    puts "Server is running on http://#{config[:host]}:#{config[:port]}/"
     loop do
       socket = server.accept
       begin
@@ -107,6 +180,10 @@ module Yanikasu
     @schema_definition = builder.to_h
   end
 
+  def self.migration(version = nil, &block)
+    @migration_definition = { version: version, block: block }
+  end
+
   def self.load_routes(router)
     @routes_block = nil
     load File.expand_path('../config/routes.rb', __dir__)
@@ -120,5 +197,61 @@ module Yanikasu
     schema_file = File.expand_path('../config/schema.rb', __dir__)
     load schema_file if File.exist?(schema_file)
     @schema_definition || {}
+  end
+
+  def self.server_config(env: ENV, host: nil, port: nil, db_name: nil)
+    {
+      host: host || env.fetch('YANIKASU_HOST', 'localhost'),
+      port: Integer(port || env.fetch('YANIKASU_PORT', '3000')),
+      db_name: db_name || env.fetch('YANIKASU_DB_PATH', 'db.sqlite3'),
+      migrations_path: env.fetch('YANIKASU_MIGRATIONS_PATH', File.expand_path('../migrations', __dir__))
+    }
+  end
+
+  def self.run_pending_migrations(db, path: default_migrations_path)
+    ensure_migration_table(db)
+    applied_versions = db.execute('SELECT version FROM schema_migrations ORDER BY version').map do |row|
+      row['version'] || row[0]
+    end
+
+    migration_files(path).each do |file|
+      definition = load_migration(file)
+      version = definition[:version]
+      next if applied_versions.include?(version)
+
+      db.transaction do
+        MigrationContext.new(db).instance_eval(&definition[:block])
+        db.execute('INSERT INTO schema_migrations (version) VALUES (?)', [version])
+      end
+    end
+  end
+
+  def self.default_migrations_path
+    File.expand_path('../migrations', __dir__)
+  end
+
+  def self.migration_files(path)
+    return [] unless Dir.exist?(path)
+
+    Dir[File.join(path, '*.rb')].sort
+  end
+
+  def self.load_migration(path)
+    @migration_definition = nil
+    load path
+    raise ArgumentError, "No migration defined in #{path}" unless @migration_definition
+
+    {
+      version: (@migration_definition[:version] || File.basename(path, '.rb')),
+      block: @migration_definition[:block]
+    }
+  end
+
+  def self.ensure_migration_table(db)
+    db.execute <<~SQL
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version TEXT PRIMARY KEY
+      );
+    SQL
   end
 end

@@ -1,0 +1,5 @@
+#!/usr/bin/env ruby
+require_relative '../lib/yanikasu'
+require_relative '../lib/cli'
+
+exit CLI.new.run(ARGV)

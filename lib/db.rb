@@ -18,15 +18,8 @@ class DB
 
   def setup_schema
     @schema.each do |collection, attributes|
-      column_definitions = attributes.map do |name, meta|
-        "#{name} #{meta[:sql_type]}"
-      end
-      @db.execute <<-SQL
-        CREATE TABLE IF NOT EXISTS #{collection} (
-          id INTEGER PRIMARY KEY,
-          #{column_definitions.join(",\n          ")}
-        );
-      SQL
+      ensure_table(collection, attributes)
+      ensure_columns(collection, attributes)
     end
   end
 
@@ -72,7 +65,45 @@ class DB
     hydrate_row(collection, row)
   end
 
+  def execute(sql, binds = [])
+    @db.execute(sql, binds)
+  end
+
+  def transaction
+    @db.transaction
+    yield
+    @db.commit
+  rescue StandardError
+    @db.rollback
+    raise
+  end
+
   private
+
+  def ensure_table(collection, attributes)
+    column_definitions = attributes.map do |name, meta|
+      "#{name} #{meta[:sql_type]}"
+    end
+    @db.execute <<-SQL
+      CREATE TABLE IF NOT EXISTS #{collection} (
+        id INTEGER PRIMARY KEY,
+        #{column_definitions.join(",\n        ")}
+      );
+    SQL
+  end
+
+  def ensure_columns(collection, attributes)
+    existing_columns = table_columns(collection)
+    attributes.each do |name, meta|
+      next if existing_columns.include?(name)
+
+      @db.execute("ALTER TABLE #{collection} ADD COLUMN #{name} #{meta[:sql_type]}")
+    end
+  end
+
+  def table_columns(collection)
+    @db.execute("PRAGMA table_info(#{collection})").map { |column| column['name'] }
+  end
 
   def normalize_schema(schema)
     schema.each_with_object({}) do |(collection, attributes), normalized|

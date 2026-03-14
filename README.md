@@ -3,9 +3,11 @@
 
 ### 構成
 - `bin/main.rb`: サーバー起動エントリーポイント
+- `bin/yanikasu`: 初期化とコード生成用 CLI
 - `lib/`: HTTP サーバー、Router、Request、Response、DB の基礎実装
 - `config/routes.rb`: アプリケーションルート定義
 - `config/schema.rb`: SQLite テーブル定義
+- `docs/roadmap.md`: 開発進捗と今後の計画
 - `test/`: Minitest による単体テスト
 
 ### セットアップ
@@ -23,12 +25,30 @@ bundle install
 ruby bin/main.rb
 ```
 
+### CLI
+```bash
+ruby bin/yanikasu init
+ruby bin/yanikasu generate migration create_posts
+ruby bin/yanikasu generate resource posts title:string published:boolean
+```
+
+`init` は `config/routes.rb`、`config/schema.rb`、`migrations/` を生成します。`generate migration NAME` はタイムスタンプ付き migration ファイルを生成します。`generate resource` は schema・routes・migration をまとめて追加します。
+
+環境変数で起動設定を上書きできます。
+
+```bash
+YANIKASU_HOST=0.0.0.0 YANIKASU_PORT=4567 YANIKASU_DB_PATH=tmp/app.sqlite3 ruby bin/main.rb
+```
+
 ### テスト
 ```bash
 ruby -Itest test/request_test.rb
 ruby -Itest test/response_test.rb
 ruby -Itest test/router_test.rb
 ruby -Itest test/routes_test.rb
+ruby -Itest test/yanikasu_test.rb
+ruby -Itest test/migration_test.rb
+ruby -Itest test/cli_test.rb
 ```
 
 ### 追加済みエンドポイント
@@ -69,3 +89,23 @@ Yanikasu.define_schema do
   end
 end
 ```
+
+既存の SQLite ファイルに対しては、起動時に不足しているカラムだけ自動追加します。既存カラムの型変更や削除はまだ扱わないため、その段階では migration 導入が必要です。
+
+### Migration
+`migrations/` 配下の Ruby ファイルは、サーバー起動時に未実行分だけ順番に実行されます。実行履歴は SQLite の `schema_migrations` テーブルに保存されます。
+
+```ruby
+Yanikasu.migration do
+  create_table :posts do
+    string :title
+    boolean :published
+  end
+
+  add_column :posts, :views, :integer
+end
+```
+
+migration ブロックでは `create_table`, `add_column`, `drop_table`, `execute` が使えます。
+
+migration ディレクトリは `YANIKASU_MIGRATIONS_PATH` で変更できます。
