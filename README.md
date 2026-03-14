@@ -23,12 +23,19 @@ bundle install
 ruby bin/main.rb
 ```
 
+環境変数で起動設定を上書きできます。
+
+```bash
+YANIKASU_HOST=0.0.0.0 YANIKASU_PORT=4567 YANIKASU_DB_PATH=tmp/app.sqlite3 ruby bin/main.rb
+```
+
 ### テスト
 ```bash
 ruby -Itest test/request_test.rb
 ruby -Itest test/response_test.rb
 ruby -Itest test/router_test.rb
 ruby -Itest test/routes_test.rb
+ruby -Itest test/yanikasu_test.rb
 ```
 
 ### 追加済みエンドポイント
