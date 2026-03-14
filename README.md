@@ -3,9 +3,11 @@
 
 ### 構成
 - `bin/main.rb`: サーバー起動エントリーポイント
+- `bin/yanikasu`: 初期化とコード生成用 CLI
 - `lib/`: HTTP サーバー、Router、Request、Response、DB の基礎実装
 - `config/routes.rb`: アプリケーションルート定義
 - `config/schema.rb`: SQLite テーブル定義
+- `docs/roadmap.md`: 開発進捗と今後の計画
 - `test/`: Minitest による単体テスト
 
 ### セットアップ
