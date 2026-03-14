@@ -118,6 +118,14 @@ module Yanikasu
     run_pending_migrations(db, path: config[:migrations_path])
     router = Router.new
     load_routes(router)
+    puts <<~BANNER
+      ██╗   ██╗ █████╗ ███╗   ██╗██╗██╗  ██╗ █████╗ ███████╗██╗   ██╗
+      ╚██╗ ██╔╝██╔══██╗████╗  ██║██║██║ ██╔╝██╔══██╗██╔════╝██║   ██║
+       ╚████╔╝ ███████║██╔██╗ ██║██║█████╔╝ ███████║███████╗██║   ██║
+        ╚██╔╝  ██╔══██║██║╚██╗██║██║██╔═██╗ ██╔══██║╚════██║██║   ██║
+         ██║   ██║  ██║██║ ╚████║██║██║  ██╗██║  ██║███████║╚██████╔╝
+         ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝
+    BANNER
     puts "Server is running on http://#{config[:host]}:#{config[:port]}/"
     loop do
       socket = server.accept
