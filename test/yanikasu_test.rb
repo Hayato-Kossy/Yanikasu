@@ -35,4 +35,12 @@ class YanikasuTest < Minitest::Test
     assert_equal 9292, config[:port]
     assert_equal 'tmp/test.sqlite3', config[:db_name]
   end
+
+  def test_server_config_includes_migrations_path
+    config = Yanikasu.server_config(
+      env: { 'YANIKASU_MIGRATIONS_PATH' => 'tmp/migrations' }
+    )
+
+    assert_equal 'tmp/migrations', config[:migrations_path]
+  end
 end

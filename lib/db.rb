@@ -65,6 +65,19 @@ class DB
     hydrate_row(collection, row)
   end
 
+  def execute(sql, binds = [])
+    @db.execute(sql, binds)
+  end
+
+  def transaction
+    @db.transaction
+    yield
+    @db.commit
+  rescue StandardError
+    @db.rollback
+    raise
+  end
+
   private
 
   def ensure_table(collection, attributes)
