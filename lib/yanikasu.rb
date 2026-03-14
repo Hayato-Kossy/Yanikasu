@@ -11,12 +11,72 @@ require_relative '../middleware/cors'
 
 module Yanikasu
   class MigrationContext
+    TYPE_MAP = {
+      string: 'TEXT',
+      text: 'TEXT',
+      integer: 'INTEGER',
+      boolean: 'INTEGER',
+      float: 'REAL'
+    }.freeze
+
     def initialize(db)
       @db = db
     end
 
     def execute(sql, binds = [])
       @db.execute(sql, binds)
+    end
+
+    def create_table(name, &block)
+      builder = TableDefinition.new
+      builder.instance_eval(&block) if block
+      column_sql = builder.to_sql
+      execute <<~SQL
+        CREATE TABLE #{quote_identifier(name)} (
+          id INTEGER PRIMARY KEY#{column_sql.empty? ? '' : ",\n  #{column_sql}"}
+        );
+      SQL
+    end
+
+    def drop_table(name)
+      execute("DROP TABLE IF EXISTS #{quote_identifier(name)}")
+    end
+
+    def add_column(table_name, column_name, type)
+      execute(
+        "ALTER TABLE #{quote_identifier(table_name)} ADD COLUMN #{quote_identifier(column_name)} #{sql_type(type)}"
+      )
+    end
+
+    private
+
+    def quote_identifier(name)
+      string = name.to_s
+      raise ArgumentError, "Invalid identifier: #{name}" unless /\A[a-zA-Z_][a-zA-Z0-9_]*\z/.match?(string)
+
+      string
+    end
+
+    def sql_type(type)
+      TYPE_MAP.fetch(type.to_sym) do
+        raise ArgumentError, "Unknown migration type: #{type}"
+      end
+    end
+
+    class TableDefinition
+      def initialize
+        @columns = []
+      end
+
+      %i[string text integer boolean float].each do |type|
+        define_method(type) do |name|
+          @columns << "#{name} #{MigrationContext::TYPE_MAP.fetch(type)}"
+        end
+      end
+
+      def to_sql
+        @columns.join(",\n  ")
+      end
     end
   end
 
