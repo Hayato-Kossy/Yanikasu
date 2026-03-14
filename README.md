@@ -5,6 +5,7 @@
 - `bin/main.rb`: サーバー起動エントリーポイント
 - `lib/`: HTTP サーバー、Router、Request、Response、DB の基礎実装
 - `config/routes.rb`: アプリケーションルート定義
+- `config/schema.rb`: SQLite テーブル定義
 - `test/`: Minitest による単体テスト
 
 ### セットアップ
@@ -37,3 +38,34 @@ ruby -Itest test/routes_test.rb
 - `POST /todos`
 - `PUT /todos/:id`
 - `DELETE /todos/:id`
+
+### ルーティング定義
+`config/routes.rb` では DSL を使ってユーザーがルートを定義できます。
+
+```ruby
+Yanikasu.draw_routes do
+  get '/health' do
+    json(status: 'ok')
+  end
+
+  post '/posts' do |req|
+    post = db.add('posts', req.json_body)
+    json(post, http_status: '201 Created')
+  end
+end
+```
+
+ルートブロック内では `db`, `params`, `json`, `text`, `not_found`, `no_content` が使えます。
+
+### スキーマ定義
+`config/schema.rb` で永続化対象のコレクションを定義します。
+
+```ruby
+Yanikasu.define_schema do
+  collection :posts do
+    string :title
+    text :body
+    boolean :published
+  end
+end
+```
