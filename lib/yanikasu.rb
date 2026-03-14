@@ -12,13 +12,7 @@ require_relative '../middleware/cors'
 
 module Yanikasu
   class MigrationContext
-    TYPE_MAP = {
-      string: 'TEXT',
-      text: 'TEXT',
-      integer: 'INTEGER',
-      boolean: 'INTEGER',
-      float: 'REAL'
-    }.freeze
+    TYPE_MAP = DB::TYPE_MAP
 
     def initialize(db)
       @db = db
@@ -163,10 +157,11 @@ module Yanikasu
       body: { error: 'Invalid JSON body' }
     ).send(socket)
   rescue StandardError => e
+    warn "Internal Server Error: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}"
     Response.new(
       status: '500 Internal Server Error',
       headers: CorsMiddleware.apply('Content-Type' => 'application/json'),
-      body: { error: 'Internal Server Error', detail: e.message }
+      body: { error: 'Internal Server Error' }
     ).send(socket)
   end
 

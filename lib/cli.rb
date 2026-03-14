@@ -150,7 +150,7 @@ class CLI
 
       get '/#{name}/:id' do |req|
         #{singular} = db.get_item('#{name}', req.params['id'].to_i)
-        return not_found('#{singular.capitalize} not found') unless #{singular}
+        next not_found('#{singular.capitalize} not found') unless #{singular}
 
         json(#{singular})
       end
@@ -162,7 +162,7 @@ class CLI
 
       put '/#{name}/:id' do |req|
         updated_#{singular} = db.update('#{name}', req.params['id'].to_i, req.json_body)
-        return not_found('#{singular.capitalize} not found') unless updated_#{singular}
+        next not_found('#{singular.capitalize} not found') unless updated_#{singular}
 
         json(updated_#{singular})
       end
