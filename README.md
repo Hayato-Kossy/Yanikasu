@@ -23,6 +23,14 @@ bundle install
 ruby bin/main.rb
 ```
 
+### CLI
+```bash
+ruby bin/yanikasu init
+ruby bin/yanikasu generate migration create_posts
+```
+
+`init` は `config/routes.rb`、`config/schema.rb`、`migrations/` を生成します。`generate migration NAME` はタイムスタンプ付き migration ファイルを生成します。
+
 環境変数で起動設定を上書きできます。
 
 ```bash
@@ -37,6 +45,7 @@ ruby -Itest test/router_test.rb
 ruby -Itest test/routes_test.rb
 ruby -Itest test/yanikasu_test.rb
 ruby -Itest test/migration_test.rb
+ruby -Itest test/cli_test.rb
 ```
 
 ### 追加済みエンドポイント
