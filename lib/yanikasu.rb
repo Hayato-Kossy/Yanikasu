@@ -2,95 +2,71 @@
 # ルーティングはcliからconfig/routes.rbに書き込み、読み込むように変更したい
 # ハンドラーも分離したい
 require 'socket'
+require 'json'
 require_relative 'router'
 require_relative 'request'
 require_relative 'response'
 require_relative 'db'
+require_relative '../middleware/cors'
+require_relative '../config/routes'
 
 module Yanikasu
   def self.handle_options_request(socket)
-    cors_headers = "Access-Control-Allow-Origin: *\r\n" +
-                   "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
-                   "Access-Control-Allow-Headers: Content-Type, Authorization\r\n" +
-                   "Content-Length: 0\r\n\r\n"
-  
-    socket.print "HTTP/1.1 200 OK\r\n" + cors_headers
-    socket.close  
+    Response.new(status: '200 OK', headers: CorsMiddleware.apply, body: '').send(socket)
   end
 
   def self.start_server
     server = TCPServer.new('localhost', 3000)
     db = DB.new
     router = Router.new
-    load_routes(router)
+    load_routes(router, db)
     puts "Server is running on http://localhost:3000/"
     loop do
-      socket = server.accept     
-      request = Request.new(socket) 
-      if request.method == 'OPTIONS'
-        handle_options_request(socket)
-        next
-      else
-        response = router.find_route_and_execute(request, db)
-        resp = Response.new(
-          status: response[:status],
-          headers: response[:headers],
-          body: response[:body]
-        )
-        resp.send(socket)
-        puts response[:body]
+      socket = server.accept
+      begin
+        request = Request.new(socket)
+        process_request(socket, request, router, db)
+      rescue ArgumentError => e
+        Response.new(
+          status: '400 Bad Request',
+          headers: CorsMiddleware.apply('Content-Type' => 'application/json'),
+          body: { error: e.message }
+        ).send(socket)
+      ensure
+        socket.close unless socket.closed?
       end
-
-      socket.close
     end
   end
 
-  def self.load_routes(router)
-    router.add_route('GET', '/todos', method(:get_all_todos))
-    router.add_route('GET', '/todos/:id', method(:get_todo))
-    router.add_route('POST', '/todos', method(:create_todo))
-    router.add_route('PUT', '/todos/:id', method(:update_todo))
-    router.add_route('DELETE', '/todos/:id', method(:delete_todo))
+  def self.process_request(socket, request, router, db)
+    if request.method == 'OPTIONS'
+      handle_options_request(socket)
+      return
+    end
+
+    response = router.find_route_and_execute(request, db)
+    resp = Response.new(
+      status: response[:status],
+      headers: CorsMiddleware.apply(response[:headers] || {}),
+      body: response[:body] || ''
+    )
+    resp.send(socket)
+    puts response[:body]
+  rescue JSON::ParserError
+    Response.new(
+      status: '400 Bad Request',
+      headers: CorsMiddleware.apply('Content-Type' => 'application/json'),
+      body: { error: 'Invalid JSON body' }
+    ).send(socket)
+  rescue StandardError => e
+    Response.new(
+      status: '500 Internal Server Error',
+      headers: CorsMiddleware.apply('Content-Type' => 'application/json'),
+      body: { error: 'Internal Server Error', detail: e.message }
+    ).send(socket)
   end
 
-  def self.get_all_todos(req, db)
-    todos = db.get('todos')
-    { status: '200 OK', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(todos.map { |todo| {id: todo[:id], title: todo[:title], completed: todo[:completed]} }) }
-  end  
-  
-  def self.get_todo(req, db)
-    todo_id = req.params['id'].to_i
-    todo = db.get_item('todos', todo_id)
-    if todo
-      { status: '200 OK', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(id: todo[:id], title: todo[:title], completed: todo[:completed]) }
-    else
-      { status: '404 Not Found', headers: {'Content-Type' => 'text/plain'}, body: 'Todo not found' }
-    end
-  end  
-  
-  def self.create_todo(req, db)
-    data = req.json_body
-    todo = db.add('todos', data)
-    { status: '201 Created', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(id: todo[:id], title: todo[:title], completed: todo[:completed]) }
-  end  
-  
-  def self.update_todo(req, db)
-    todo_id = req.params['id'].to_i
-    update_data = req.json_body
-    updated_todo = db.update('todos', todo_id, update_data)
-    if updated_todo
-      { status: '200 OK', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(id: updated_todo[:id], title: updated_todo[:title], completed: updated_todo[:completed]) }
-    else
-      { status: '404 Not Found', headers: {'Content-Type' => 'text/plain'}, body: 'Todo not found' }
-    end
-  end  
-  
-  def self.delete_todo(req, db)
-    todo_id = req.params['id'].to_i
-    if db.delete('todos', todo_id)
-      { status: '204 No Content', headers: {}, body: '' }
-    else
-      { status: '404 Not Found', headers: {'Content-Type' => 'text/plain'}, body: 'Todo not found' }
-    end
-  end 
+  def self.load_routes(router, db)
+    Routes.apply(router, db)
+  end
 end

@@ -1,46 +1,50 @@
 # config/routes.rb
+require 'json'
+
 module Routes
-    def self.apply_routes(router, db)
-      router.add_route('GET', '/todos', lambda { |req|
-        if req.params['id']
-          todo_id = req.params['id'].to_i
-          todo = db.get('todos', todo_id)
-          if todo
-            { status: '200 OK', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(todo) }
-          else
-            { status: '404 Not Found', headers: {'Content-Type' => 'text/plain'}, body: 'Todo not found' }
-          end
-        else
-          todos = db.get_all('todos')
-          { status: '200 OK', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(todos) }
-        end
-      })
-  
-      router.add_route('POST', '/todos', lambda { |req|
-        data = req.json_body
-        todo = db.add('todos', data)
-        { status: '201 Created', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(todo) }
-      })
-  
-      router.add_route('PUT', '/todos/:id', lambda { |req|
-        todo_id = req.params['id'].to_i
-        update_data = req.json_body
-        updated_todo = db.update('todos', todo_id, update_data)
-        if updated_todo
-          { status: '200 OK', headers: {'Content-Type' => 'application/json'}, body: JSON.dump(updated_todo) }
-        else
-          { status: '404 Not Found', headers: {'Content-Type' => 'text/plain'}, body: 'Todo not found' }
-        end
-      })
-  
-      router.add_route('DELETE', '/todos/:id', lambda { |req|
-        todo_id = req.params['id'].to_i
-        if db.delete('todos', todo_id)
-          { status: '204 No Content', headers: {}, body: '' }
-        else
-          { status: '404 Not Found', headers: {'Content-Type' => 'text/plain'}, body: 'Todo not found' }
-        end
-      })
-    end
+  def self.apply(router, db)
+    router.add_route('GET', '/health', lambda { |_req|
+      json_response('200 OK', status: 'ok')
+    })
+
+    router.add_route('GET', '/todos', lambda { |_req|
+      todos = db.get_all('todos')
+      json_response('200 OK', todos)
+    })
+
+    router.add_route('GET', '/todos/:id', lambda { |req|
+      todo = db.get_item('todos', req.params['id'].to_i)
+      return not_found('Todo not found') unless todo
+
+      json_response('200 OK', todo)
+    })
+
+    router.add_route('POST', '/todos', lambda { |req|
+      todo = db.add('todos', req.json_body)
+      json_response('201 Created', todo)
+    })
+
+    router.add_route('PUT', '/todos/:id', lambda { |req|
+      updated_todo = db.update('todos', req.params['id'].to_i, req.json_body)
+      return not_found('Todo not found') unless updated_todo
+
+      json_response('200 OK', updated_todo)
+    })
+
+    router.add_route('DELETE', '/todos/:id', lambda { |req|
+      if db.delete('todos', req.params['id'].to_i)
+        { status: '204 No Content', headers: {}, body: '' }
+      else
+        not_found('Todo not found')
+      end
+    })
   end
-  
+
+  def self.json_response(status, body)
+    { status: status, headers: { 'Content-Type' => 'application/json' }, body: JSON.dump(body) }
+  end
+
+  def self.not_found(message)
+    { status: '404 Not Found', headers: { 'Content-Type' => 'text/plain' }, body: message }
+  end
+end
