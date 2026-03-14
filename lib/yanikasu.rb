@@ -46,12 +46,13 @@ module Yanikasu
     Response.new(status: '200 OK', headers: CorsMiddleware.apply, body: '').send(socket)
   end
 
-  def self.start_server
-    server = TCPServer.new('localhost', 3000)
-    db = DB.new('db.sqlite3', schema: load_schema)
+  def self.start_server(host: nil, port: nil, db_name: nil, env: ENV)
+    config = server_config(env: env, host: host, port: port, db_name: db_name)
+    server = TCPServer.new(config[:host], config[:port])
+    db = DB.new(config[:db_name], schema: load_schema)
     router = Router.new
     load_routes(router)
-    puts "Server is running on http://localhost:3000/"
+    puts "Server is running on http://#{config[:host]}:#{config[:port]}/"
     loop do
       socket = server.accept
       begin
@@ -120,5 +121,13 @@ module Yanikasu
     schema_file = File.expand_path('../config/schema.rb', __dir__)
     load schema_file if File.exist?(schema_file)
     @schema_definition || {}
+  end
+
+  def self.server_config(env: ENV, host: nil, port: nil, db_name: nil)
+    {
+      host: host || env.fetch('YANIKASU_HOST', 'localhost'),
+      port: Integer(port || env.fetch('YANIKASU_PORT', '3000')),
+      db_name: db_name || env.fetch('YANIKASU_DB_PATH', 'db.sqlite3')
+    }
   end
 end
