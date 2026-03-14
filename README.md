@@ -27,9 +27,10 @@ ruby bin/main.rb
 ```bash
 ruby bin/yanikasu init
 ruby bin/yanikasu generate migration create_posts
+ruby bin/yanikasu generate resource posts title:string published:boolean
 ```
 
-`init` は `config/routes.rb`、`config/schema.rb`、`migrations/` を生成します。`generate migration NAME` はタイムスタンプ付き migration ファイルを生成します。
+`init` は `config/routes.rb`、`config/schema.rb`、`migrations/` を生成します。`generate migration NAME` はタイムスタンプ付き migration ファイルを生成します。`generate resource` は schema・routes・migration をまとめて追加します。
 
 環境変数で起動設定を上書きできます。
 
