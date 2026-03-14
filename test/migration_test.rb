@@ -61,4 +61,41 @@ class MigrationTest < Minitest::Test
       assert_equal 'custom_version', definition[:version]
     end
   end
+
+  def test_migration_helpers_create_and_update_table
+    Dir.mktmpdir do |dir|
+      db = DB.new(File.join(dir, 'test.sqlite3'), schema: {})
+
+      db.transaction do
+        Yanikasu::MigrationContext.new(db).instance_eval do
+          create_table :posts do
+            string :title
+            boolean :published
+          end
+          add_column :posts, :views, :integer
+        end
+      end
+
+      columns = db.execute('PRAGMA table_info(posts)').map do |row|
+        [row['name'], row['type']]
+      end
+
+      assert_equal(
+        [['id', 'INTEGER'], ['title', 'TEXT'], ['published', 'INTEGER'], ['views', 'INTEGER']],
+        columns
+      )
+    end
+  end
+
+  def test_migration_helper_rejects_invalid_identifier
+    Dir.mktmpdir do |dir|
+      db = DB.new(File.join(dir, 'test.sqlite3'), schema: {})
+
+      error = assert_raises(ArgumentError) do
+        Yanikasu::MigrationContext.new(db).create_table('posts; drop table users')
+      end
+
+      assert_equal 'Invalid identifier: posts; drop table users', error.message
+    end
+  end
 end

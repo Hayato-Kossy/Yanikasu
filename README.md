@@ -85,13 +85,15 @@ end
 
 ```ruby
 Yanikasu.migration do
-  execute <<~SQL
-    CREATE TABLE posts (
-      id INTEGER PRIMARY KEY,
-      title TEXT
-    );
-  SQL
+  create_table :posts do
+    string :title
+    boolean :published
+  end
+
+  add_column :posts, :views, :integer
 end
 ```
+
+migration ブロックでは `create_table`, `add_column`, `drop_table`, `execute` が使えます。
 
 migration ディレクトリは `YANIKASU_MIGRATIONS_PATH` で変更できます。
