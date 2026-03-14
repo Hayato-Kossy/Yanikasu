@@ -7,6 +7,7 @@ require_relative 'router'
 require_relative 'request'
 require_relative 'response'
 require_relative 'db'
+require_relative 'cli'
 require_relative '../middleware/cors'
 
 module Yanikasu
