@@ -56,4 +56,17 @@ class RoutesTest < Minitest::Test
 
     assert_equal({ 'title' => :string, 'completed' => :boolean }, schema['todos'])
   end
+
+  def test_db_adds_missing_columns_for_existing_table
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'test.sqlite3')
+      DB.new(path, schema: { 'todos' => { 'title' => :string } })
+
+      db = DB.new(path, schema: Yanikasu.load_schema)
+      todo = db.add('todos', { 'title' => 'Write tests', 'completed' => true })
+
+      assert_equal true, todo[:completed]
+      assert_equal 'Write tests', todo[:title]
+    end
+  end
 end

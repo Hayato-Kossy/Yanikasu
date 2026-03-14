@@ -76,3 +76,5 @@ Yanikasu.define_schema do
   end
 end
 ```
+
+既存の SQLite ファイルに対しては、起動時に不足しているカラムだけ自動追加します。既存カラムの型変更や削除はまだ扱わないため、その段階では migration 導入が必要です。
