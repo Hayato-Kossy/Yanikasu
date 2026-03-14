@@ -10,6 +10,16 @@ require_relative 'db'
 require_relative '../middleware/cors'
 
 module Yanikasu
+  class MigrationContext
+    def initialize(db)
+      @db = db
+    end
+
+    def execute(sql, binds = [])
+      @db.execute(sql, binds)
+    end
+  end
+
   class SchemaDSL
     def initialize
       @schema = {}
@@ -50,6 +60,7 @@ module Yanikasu
     config = server_config(env: env, host: host, port: port, db_name: db_name)
     server = TCPServer.new(config[:host], config[:port])
     db = DB.new(config[:db_name], schema: load_schema)
+    run_pending_migrations(db, path: config[:migrations_path])
     router = Router.new
     load_routes(router)
     puts "Server is running on http://#{config[:host]}:#{config[:port]}/"
@@ -108,6 +119,10 @@ module Yanikasu
     @schema_definition = builder.to_h
   end
 
+  def self.migration(version = nil, &block)
+    @migration_definition = { version: version, block: block }
+  end
+
   def self.load_routes(router)
     @routes_block = nil
     load File.expand_path('../config/routes.rb', __dir__)
@@ -127,7 +142,55 @@ module Yanikasu
     {
       host: host || env.fetch('YANIKASU_HOST', 'localhost'),
       port: Integer(port || env.fetch('YANIKASU_PORT', '3000')),
-      db_name: db_name || env.fetch('YANIKASU_DB_PATH', 'db.sqlite3')
+      db_name: db_name || env.fetch('YANIKASU_DB_PATH', 'db.sqlite3'),
+      migrations_path: env.fetch('YANIKASU_MIGRATIONS_PATH', File.expand_path('../migrations', __dir__))
     }
+  end
+
+  def self.run_pending_migrations(db, path: default_migrations_path)
+    ensure_migration_table(db)
+    applied_versions = db.execute('SELECT version FROM schema_migrations ORDER BY version').map do |row|
+      row['version'] || row[0]
+    end
+
+    migration_files(path).each do |file|
+      definition = load_migration(file)
+      version = definition[:version]
+      next if applied_versions.include?(version)
+
+      db.transaction do
+        MigrationContext.new(db).instance_eval(&definition[:block])
+        db.execute('INSERT INTO schema_migrations (version) VALUES (?)', [version])
+      end
+    end
+  end
+
+  def self.default_migrations_path
+    File.expand_path('../migrations', __dir__)
+  end
+
+  def self.migration_files(path)
+    return [] unless Dir.exist?(path)
+
+    Dir[File.join(path, '*.rb')].sort
+  end
+
+  def self.load_migration(path)
+    @migration_definition = nil
+    load path
+    raise ArgumentError, "No migration defined in #{path}" unless @migration_definition
+
+    {
+      version: (@migration_definition[:version] || File.basename(path, '.rb')),
+      block: @migration_definition[:block]
+    }
+  end
+
+  def self.ensure_migration_table(db)
+    db.execute <<~SQL
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version TEXT PRIMARY KEY
+      );
+    SQL
   end
 end

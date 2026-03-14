@@ -36,6 +36,7 @@ ruby -Itest test/response_test.rb
 ruby -Itest test/router_test.rb
 ruby -Itest test/routes_test.rb
 ruby -Itest test/yanikasu_test.rb
+ruby -Itest test/migration_test.rb
 ```
 
 ### 追加済みエンドポイント
@@ -78,3 +79,19 @@ end
 ```
 
 既存の SQLite ファイルに対しては、起動時に不足しているカラムだけ自動追加します。既存カラムの型変更や削除はまだ扱わないため、その段階では migration 導入が必要です。
+
+### Migration
+`migrations/` 配下の Ruby ファイルは、サーバー起動時に未実行分だけ順番に実行されます。実行履歴は SQLite の `schema_migrations` テーブルに保存されます。
+
+```ruby
+Yanikasu.migration do
+  execute <<~SQL
+    CREATE TABLE posts (
+      id INTEGER PRIMARY KEY,
+      title TEXT
+    );
+  SQL
+end
+```
+
+migration ディレクトリは `YANIKASU_MIGRATIONS_PATH` で変更できます。
